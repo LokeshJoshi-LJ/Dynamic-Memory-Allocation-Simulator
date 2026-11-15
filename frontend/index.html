@@ -1,1 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#818263">
+    <title>Dynamic Memory Allocation Simulator</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <main class="dashboard">
+        <header class="title-banner">
+            <h1>Dynamic Memory Allocation Simulator</h1>
+        </header>
 
+        <!-- Main controls: memory size, operation and operation inputs. -->
+        <div class="top-grid">
+            <section class="card overview" aria-labelledby="overview-heading">
+                <h2 id="overview-heading" class="card-heading">Memory overview</h2>
+                <div class="overview-body">
+                    <label class="pool-label" for="pool-size">Pool size (bytes)</label>
+                    <input id="pool-size" type="number" min="1" max="102400" step="1" value="2048">
+                    <input id="pool-slider" class="pool-slider" type="range" min="1" max="102400" step="1" value="2048" aria-label="Memory pool size slider">
+                    <div class="range-labels"><span>1 B</span><span>100 KB</span></div>
+                    <p class="pool-help">Changing the size resets the simulation when you release the slider.</p>
+
+                    <dl class="statistics">
+                        <div><dt>Total memory</dt><dd id="total-value">—</dd></div>
+                        <div><dt>Used</dt><dd id="used-value">—</dd></div>
+                        <div><dt>Free</dt><dd id="free-value">—</dd></div>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card operations" aria-labelledby="operations-heading">
+                <h2 id="operations-heading" class="card-heading">Operations</h2>
+                <div class="operation-buttons" role="group" aria-label="Choose a memory operation">
+                    <button id="malloc-mode" class="operation-button malloc-operation active" type="button" aria-pressed="true">malloc</button>
+                    <button id="calloc-mode" class="operation-button calloc-operation" type="button" aria-pressed="false">calloc</button>
+                    <button id="realloc-mode" class="operation-button realloc-operation" type="button" aria-pressed="false">realloc</button>
+                </div>
+            </section>
+
+            <section class="card input-panel" aria-label="Allocation and deallocation controls">
+                <h2 id="allocation-heading" class="card-heading">Size (bytes)</h2>
+                <div class="input-panel-body">
+                    <form id="allocation-form" class="allocation-row">
+                        <div id="malloc-fields" class="allocation-fields">
+                            <label class="visually-hidden" for="allocation-size">Allocation size in bytes</label>
+                            <input id="allocation-size" type="number" min="1" max="102400" step="1" value="512" required>
+                        </div>
+
+                        <div id="calloc-fields" class="calloc-fields" hidden>
+                            <div>
+                                <label for="element-count">Count</label>
+                                <input id="element-count" type="number" min="1" max="102400" step="1" value="64" disabled>
+                            </div>
+                            <span class="multiply" aria-hidden="true">×</span>
+                            <div>
+                                <label for="element-size">Bytes each</label>
+                                <input id="element-size" type="number" min="1" max="102400" step="1" value="4" disabled>
+                            </div>
+                        </div>
+
+                        <div id="realloc-fields" class="realloc-fields" hidden>
+                            <div>
+                                <label for="realloc-id">Allocation ID</label>
+                                <select id="realloc-id" disabled>
+                                    <option value="">No allocations</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="realloc-size">New size (bytes)</label>
+                                <input id="realloc-size" type="number" min="1" max="102400" step="1" value="256" disabled>
+                            </div>
+                        </div>
+
+                        <button id="allocate-button" class="action-button" type="submit">Allocate</button>
+                    </form>
+
+                    <div class="input-divider"></div>
+
+                    <form id="free-form">
+                        <label class="free-label" for="free-id">Free allocation ID</label>
+                        <div class="free-row">
+                            <select id="free-id" aria-label="Allocation ID to free" disabled>
+                                <option value="">No allocations</option>
+                            </select>
+                            <button id="free-button" class="action-button" type="submit" disabled>Free</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
+
+        <!-- Results: the memory map, allocation table and operation history. -->
+        <div class="bottom-grid">
+            <section class="card map-card" aria-labelledby="map-heading">
+                <div class="card-heading map-heading-row">
+                    <h2 id="map-heading">Memory map</h2>
+                    <div class="strategy-control">
+                        <label for="strategy">Strategy</label>
+                        <select id="strategy" aria-label="Allocation strategy">
+                            <option value="first">First Fit</option>
+                            <option value="best">Best Fit</option>
+                            <option value="worst">Worst Fit</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="map-body">
+                    <div id="memory-bar" class="memory-bar" aria-label="Simulated memory blocks"></div>
+                    <div id="address-ticks" class="address-ticks" aria-hidden="true"></div>
+                    <p class="address-caption">Simulated addresses</p>
+                    <div class="legend" aria-label="Memory map colour legend">
+                        <span class="legend-item"><i class="swatch malloc-swatch" aria-hidden="true"></i>malloc</span>
+                        <span class="legend-item"><i class="swatch calloc-swatch" aria-hidden="true"></i>calloc</span>
+                        <span class="legend-item"><i class="swatch free-swatch" aria-hidden="true"></i>Free memory</span>
+                        <span class="legend-item"><i class="swatch realloc-swatch" aria-hidden="true"></i>realloc · resized</span>
+                    </div>
+                    <p class="map-help">Small blocks hide their text to prevent overlap. Hover over a block or select it to see its details.</p>
+                </div>
+            </section>
+
+            <section class="card allocations-card" aria-labelledby="allocations-heading">
+                <h2 id="allocations-heading" class="card-heading">Allocations</h2>
+                <div class="allocations-body">
+                    <div class="table-frame">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Type</th>
+                                    <th scope="col">Start</th>
+                                    <th scope="col">Size</th>
+                                    <th scope="col">End</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allocation-rows">
+                                <tr class="empty-row"><td colspan="5">Connecting to the C++ backend…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="table-caption">Select an allocated block to inspect its memory.</p>
+                </div>
+            </section>
+        </div>
+
+        <section class="card history-card" aria-labelledby="history-heading">
+            <div class="history-heading-row">
+                <h2 id="history-heading" class="card-heading">Operation history</h2>
+                <button id="clear-history" class="clear-history-button" type="button">Clear history</button>
+            </div>
+            <ol id="operation-history" class="history-list">
+                <li class="history-empty">Operations performed in this session will appear here.</li>
+            </ol>
+        </section>
+
+        <p id="status" class="status-bar" role="status" aria-live="polite">Connecting directly to the C++ backend…</p>
+    </main>
+
+    <dialog id="allocation-dialog" class="inspection-dialog" aria-labelledby="inspection-title">
+        <div class="inspection-heading">
+            <h2 id="inspection-title">Allocation details</h2>
+            <button id="close-inspection" type="button" aria-label="Close allocation details">×</button>
+        </div>
+        <p id="inspection-summary"></p>
+        <p id="inspection-description"></p>
+        <div id="byte-preview" class="byte-preview"></div>
+        <p id="inspection-note" class="inspection-note"></p>
+    </dialog>
+</body>
+</html>
