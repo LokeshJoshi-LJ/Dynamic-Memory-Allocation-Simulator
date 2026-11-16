@@ -400,3 +400,14 @@ string getStats() const {
     int getTotalSize() const {
         return totalSize;
     }
+~MemorySimulator() {
+        Block* current = head;
+
+        while (current != nullptr) {
+            Block* blockToDelete = current;
+            current = current->next;
+            delete[] blockToDelete->data;
+            delete blockToDelete;
+        }
+    }
+};
