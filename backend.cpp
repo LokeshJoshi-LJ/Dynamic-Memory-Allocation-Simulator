@@ -159,3 +159,129 @@ Block* findBlock(int size, const string& strategy) {
 
         return selected->id;
     }
+  int reallocate(int id, int newSize) {
+        if (newSize < 1 || newSize > totalSize)
+            return -1;
+
+        Block* current = findAllocation(id);
+        if (current == nullptr)
+            return -1;
+
+        int oldSize = current->size;
+
+        if (newSize == oldSize)
+            return id;
+
+
+        if (newSize < oldSize) {
+            char* newData = new (nothrow) char[newSize];
+            if (newData == nullptr)
+                return -1;
+
+            vector<bool> newInitialization;
+            try {
+                newInitialization.assign(
+                    current->initialized.begin(),
+                    current->initialized.begin() + newSize
+                );
+            }
+            catch (...) {
+                delete[] newData;
+                return -1;
+            }
+
+            Block* freePart = createFreeBlock(
+                current->start + newSize,
+                oldSize - newSize,
+                current->next
+            );
+
+            if (freePart == nullptr) {
+                delete[] newData;
+                return -1;
+            }
+
+            memcpy(newData, current->data, newSize);
+            delete[] current->data;
+
+            current->data = newData;
+            current->initialized.swap(newInitialization);
+            current->size = newSize;
+            current->reallocated = true;
+            current->next = freePart;
+
+            mergeBlocks();
+            return id;
+        }
+
+
+        int extraSize = newSize - oldSize;
+        Block* nextBlock = current->next;
+
+        if (nextBlock != nullptr && nextBlock->free && nextBlock->size >= extraSize) {
+            char* newData = new (nothrow) char[newSize];
+            if (newData == nullptr)
+                return -1;
+
+            vector<bool> newInitialization;
+            try {
+                newInitialization = current->initialized;
+                newInitialization.resize(newSize, false);
+            }
+            catch (...) {
+                delete[] newData;
+                return -1;
+            }
+
+            memcpy(newData, current->data, oldSize);
+            delete[] current->data;
+            current->data = newData;
+            current->initialized.swap(newInitialization);
+
+            if (nextBlock->size == extraSize) {
+                current->next = nextBlock->next;
+                delete nextBlock;
+            }
+            else {
+                nextBlock->start += extraSize;
+                nextBlock->size -= extraSize;
+            }
+
+            current->size = newSize;
+            current->reallocated = true;
+            return id;
+        }
+
+
+
+        string originalType = current->type;
+        int newId = allocate(newSize, "first", originalType);
+
+        if (newId == -1)
+            return -1;
+
+        Block* newBlock = findAllocation(newId);
+        if (newBlock == nullptr) {
+            deallocate(newId);
+            return -1;
+        }
+
+        memcpy(newBlock->data, current->data, oldSize);
+
+        try {
+            for (int index = 0; index < oldSize; index++)
+                newBlock->initialized[index] = current->initialized[index];
+
+            for (int index = oldSize; index < newSize; index++)
+                newBlock->initialized[index] = false;
+        }
+        catch (...) {
+            deallocate(newId);
+            return -1;
+        }
+
+        newBlock->reallocated = true;
+        deallocate(id);
+
+        return newId;
+    }
