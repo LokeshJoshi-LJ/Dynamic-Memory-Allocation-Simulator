@@ -411,3 +411,32 @@ string getStats() const {
         }
     }
 };
+ass MemoryOperation {
+public:
+    virtual int execute(MemorySimulator& memory, int value,
+                        const string& strategy) const = 0;
+    virtual ~MemoryOperation() {}
+};
+
+class MallocOperation : public MemoryOperation {
+public:
+    int execute(MemorySimulator& memory, int size,
+                const string& strategy) const override {
+        return memory.allocate(size, strategy, "malloc");
+    }
+};
+
+class CallocOperation : public MemoryOperation {
+public:
+    int execute(MemorySimulator& memory, int size,
+                const string& strategy) const override {
+        return memory.allocate(size, strategy, "calloc");
+    }
+};
+
+class FreeOperation : public MemoryOperation {
+public:
+    int execute(MemorySimulator& memory, int id,
+                const string&) const override {
+        return memory.deallocate(id) ? id : -1;
+    }
