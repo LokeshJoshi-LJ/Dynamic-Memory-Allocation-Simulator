@@ -285,3 +285,38 @@ Block* findBlock(int size, const string& strategy) {
 
         return newId;
     }
+bool deallocate(int id) {
+        Block* current = findAllocation(id);
+
+        if (current == nullptr)
+            return false;
+
+        delete[] current->data;
+        current->data = nullptr;
+        current->initialized.clear();
+        current->free = true;
+        current->reallocated = false;
+        current->id = 0;
+        current->type = "free";
+
+        mergeBlocks();
+        return true;
+    }
+
+    // Join neighbouring free blocks into one larger free block.
+    void mergeBlocks() {
+        Block* current = head;
+
+        while (current != nullptr && current->next != nullptr) {
+            if (current->free && current->next->free) {
+                Block* blockToDelete = current->next;
+                current->size += blockToDelete->size;
+                current->next = blockToDelete->next;
+                delete blockToDelete;
+            }
+            else {
+                current = current->next;
+            }
+        }
+        
+    }
