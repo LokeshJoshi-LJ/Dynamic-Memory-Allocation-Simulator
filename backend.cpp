@@ -320,3 +320,26 @@ bool deallocate(int id) {
         }
         
     }
+string getMemory() const {
+        string result = "[";
+        Block* current = head;
+
+        while (current != nullptr) {
+            result += "{\"id\":" + to_string(current->id);
+            result += ",\"start\":" + to_string(current->start);
+            result += ",\"size\":" + to_string(current->size);
+            result += ",\"end\":" + to_string(current->start + current->size - 1);
+            result += ",\"free\":" + string(current->free ? "true" : "false");
+            result += ",\"type\":\"" + current->type + "\"";
+            result += ",\"reallocated\":" + string(current->reallocated ? "true" : "false");
+            result += "}";
+
+            if (current->next != nullptr)
+                result += ",";
+
+            current = current->next;
+        }
+
+        result += "]";
+        return result;
+    }
