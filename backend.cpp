@@ -73,3 +73,29 @@ public:
 
         cout << "Memory Initialized: " << size << " Bytes" << endl;
     }
+Block* findBlock(int size, const string& strategy) {
+        Block* current = head;
+        Block* selected = nullptr;
+
+        while (current != nullptr) {
+            if (current->free && current->size >= size) {
+
+                if (strategy == "first")
+                    return current;
+
+                if (selected == nullptr) {
+                    selected = current;
+                }
+                else if (strategy == "best" && current->size < selected->size) {
+                    selected = current;
+                }
+                else if (strategy == "worst" && current->size > selected->size) {
+                    selected = current;
+                }
+            }
+
+            current = current->next;
+        }
+
+        return selected;
+    }
