@@ -99,3 +99,63 @@ Block* findBlock(int size, const string& strategy) {
 
         return selected;
     }
+
+    int allocate(int size, const string& strategy, const string& type) {
+        if (size < 1 || size > totalSize)
+            return -1;
+
+        if (type != "malloc" && type != "calloc")
+            return -1;
+
+        if (strategy != "first" && strategy != "best" && strategy != "worst")
+            return -1;
+
+        Block* selected = findBlock(size, strategy);
+
+        if (selected == nullptr)
+            return -1;
+
+
+        char* newData = new (nothrow) char[size];
+        if (newData == nullptr)
+            return -1;
+
+        vector<bool> newInitialization;
+        try {
+            newInitialization.assign(size, type == "calloc");
+        }
+        catch (...) {
+            delete[] newData;
+            return -1;
+        }
+
+        Block* remainingBlock = nullptr;
+        if (selected->size > size) {
+            remainingBlock = createFreeBlock(
+                selected->start + size,
+                selected->size - size,
+                selected->next
+            );
+
+            if (remainingBlock == nullptr) {
+                delete[] newData;
+                return -1;
+            }
+        }
+
+        if (type == "calloc")
+            memset(newData, 0, size);
+
+        if (remainingBlock != nullptr)
+            selected->next = remainingBlock;
+
+        selected->size = size;
+        selected->free = false;
+        selected->reallocated = false;
+        selected->id = nextId++;
+        selected->type = type;
+        selected->data = newData;
+        selected->initialized.swap(newInitialization);
+
+        return selected->id;
+    }
