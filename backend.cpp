@@ -343,3 +343,38 @@ string getMemory() const {
         result += "]";
         return result;
     }
+string getInspection(int id) const {
+        Block* current = head;
+
+        while (current != nullptr) {
+            if (!current->free && current->id == id) {
+                const int previewSize = min(current->size, 24);
+                string result = "{\"success\":true";
+                result += ",\"id\":" + to_string(current->id);
+                result += ",\"start\":" + to_string(current->start);
+                result += ",\"size\":" + to_string(current->size);
+                result += ",\"type\":\"" + current->type + "\"";
+                result += ",\"reallocated\":" + string(current->reallocated ? "true" : "false");
+                result += ",\"bytes\":[";
+
+                for (int index = 0; index < previewSize; index++) {
+                    if (current->initialized[index]) {
+                        result += to_string(static_cast<unsigned char>(current->data[index]));
+                    }
+                    else {
+                        result += "null";
+                    }
+
+                    if (index + 1 < previewSize)
+                        result += ",";
+                }
+
+                result += "]}";
+                return result;
+            }
+
+            current = current->next;
+        }
+
+        return "{\"success\":false,\"message\":\"Allocation ID not found\"}";
+}
