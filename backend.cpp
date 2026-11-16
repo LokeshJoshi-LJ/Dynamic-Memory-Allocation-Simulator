@@ -378,3 +378,25 @@ string getInspection(int id) const {
 
         return "{\"success\":false,\"message\":\"Allocation ID not found\"}";
 }
+string getStats() const {
+        int used = 0;
+        int freeMemory = 0;
+        Block* current = head;
+
+        while (current != nullptr) {
+            if (current->free)
+                freeMemory += current->size;
+            else
+                used += current->size;
+
+            current = current->next;
+        }
+
+        return "{\"total\":" + to_string(totalSize) +
+               ",\"used\":" + to_string(used) +
+               ",\"free\":" + to_string(freeMemory) + "}";
+    }
+
+    int getTotalSize() const {
+        return totalSize;
+    }
