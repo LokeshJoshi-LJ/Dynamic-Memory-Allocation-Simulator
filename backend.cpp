@@ -440,3 +440,213 @@ public:
                 const string&) const override {
         return memory.deallocate(id) ? id : -1;
     }
+int getNumber(const string& body, const string& key) {
+    regex pattern("\\\"" + key + "\\\"\\s*:\\s*(-?\\d+)");
+    smatch match;
+
+    if (regex_search(body, match, pattern)) {
+        try {
+            return stoi(match[1]);
+        }
+        catch (...) {
+            return -1;
+        }
+    }
+
+    return -1;
+}
+
+
+string getString(const string& body, const string& key) {
+    regex pattern("\\\"" + key + "\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    smatch match;
+
+    if (regex_search(body, match, pattern))
+        return match[1];
+
+    return "";
+}
+
+#ifndef DMA_SIMULATOR_TEST
+int main() {
+
+
+    MemorySimulator* memory = new MemorySimulator(2048);
+    httplib::Server server;
+
+    MallocOperation mallocOperation;
+    CallocOperation callocOperation;
+    FreeOperation freeOperation;
+
+
+    auto addHeaders = [](httplib::Response& response) {
+        response.set_header("Access-Control-Allow-Origin", "*");
+        response.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        response.set_header("Access-Control-Allow-Headers", "Content-Type");
+    };
+
+    server.Options(R"(/.*)", [&](const httplib::Request&, httplib::Response& response) {
+        addHeaders(response);
+        response.status = 204;
+    });
+
+
+    server.Get("/health", [&](const httplib::Request&, httplib::Response& response) {
+        addHeaders(response);
+        response.set_content("{\"success\":true,\"message\":\"C++ server is running\"}", "application/json");
+    });
+
+
+    server.Post("/reset", [&](const httplib::Request& request, httplib::Response& response) {
+        addHeaders(response);
+        int newSize = getNumber(request.body, "size");
+
+        if (newSize < 1 || newSize > 102400) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Pool size must be between 1 and 102400 bytes.\"}", "application/json");
+            return;
+        }
+
+        try {
+            MemorySimulator* newMemory = new MemorySimulator(newSize);
+            delete memory;
+            memory = newMemory;
+        }
+        catch (...) {
+            response.status = 500;
+            response.set_content("{\"success\":false,\"message\":\"Could not create the requested memory pool.\"}", "application/json");
+            return;
+        }
+
+        response.set_content(
+            "{\"success\":true,\"message\":\"Memory pool reset.\",\"total\":" + to_string(newSize) + "}",
+            "application/json"
+        );
+    });
+
+
+    server.Post("/allocate", [&](const httplib::Request& request, httplib::Response& response) {
+        addHeaders(response);
+
+        int size = getNumber(request.body, "size");
+        string strategy = getString(request.body, "strategy");
+        string type = getString(request.body, "type");
+
+        if (size < 1 || size > memory->getTotalSize()) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Allocation size must fit inside the memory pool.\"}", "application/json");
+            return;
+        }
+
+        if (strategy != "first" && strategy != "best" && strategy != "worst") {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Choose First Fit, Best Fit or Worst Fit.\"}", "application/json");
+            return;
+        }
+
+        const MemoryOperation* operation = nullptr;
+        if (type == "malloc")
+            operation = &mallocOperation;
+        else if (type == "calloc")
+            operation = &callocOperation;
+        else {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Allocation type must be malloc or calloc.\"}", "application/json");
+            return;
+        }
+
+        int id = operation->execute(*memory, size, strategy);
+        if (id == -1) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Allocation failed: no suitable free block is available.\"}", "application/json");
+            return;
+        }
+
+        response.set_content(
+            "{\"success\":true,\"id\":" + to_string(id) + ",\"message\":\"Allocation successful.\"}",
+            "application/json"
+        );
+    });
+
+
+    server.Post("/realloc", [&](const httplib::Request& request, httplib::Response& response) {
+        addHeaders(response);
+        int id = getNumber(request.body, "id");
+        int newSize = getNumber(request.body, "size");
+
+        if (id < 1 || newSize < 1 || newSize > memory->getTotalSize()) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Choose a valid allocation and a new size within the pool.\"}", "application/json");
+            return;
+        }
+
+        int newId = memory->reallocate(id, newSize);
+        if (newId == -1) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"Reallocation failed. The original allocation was kept unchanged.\"}", "application/json");
+            return;
+        }
+
+        response.set_content(
+            "{\"success\":true,\"id\":" + to_string(newId) + ",\"message\":\"Reallocation successful.\"}",
+            "application/json"
+        );
+    });
+
+
+    server.Post("/free", [&](const httplib::Request& request, httplib::Response& response) {
+        addHeaders(response);
+        int id = getNumber(request.body, "id");
+
+        bool success = freeOperation.execute(*memory, id, "") != -1;
+        if (!success) {
+            response.status = 400;
+            response.set_content("{\"success\":false,\"message\":\"That allocation ID does not exist.\"}", "application/json");
+            return;
+        }
+
+        response.set_content("{\"success\":true,\"message\":\"Memory released and adjacent free blocks merged.\"}", "application/json");
+    });
+
+
+    server.Post("/inspect", [&](const httplib::Request& request, httplib::Response& response) {
+        addHeaders(response);
+        int id = getNumber(request.body, "id");
+        string result = memory->getInspection(id);
+
+        if (result.find("\"success\":false") != string::npos)
+            response.status = 404;
+
+        response.set_content(result, "application/json");
+    });
+
+    server.Get("/memory", [&](const httplib::Request&, httplib::Response& response) {
+        addHeaders(response);
+        response.set_content(memory->getMemory(), "application/json");
+    });
+
+    server.Get("/stats", [&](const httplib::Request&, httplib::Response& response) {
+        addHeaders(response);
+        response.set_content(memory->getStats(), "application/json");
+    });
+
+
+    if (!server.set_mount_point("/", "./frontend")) {
+        cerr << "Could not find the frontend folder. Run the program from the project folder." << endl;
+        delete memory;
+        return 1;
+    }
+
+    cout << "\nDynamic Memory Allocation Simulator is running." << endl;
+    cout << "Open http://localhost:8080 in your browser." << endl;
+    cout << "Keep this terminal open while using the simulator." << endl;
+
+    bool started = server.listen("127.0.0.1", 8080);
+
+    if (!started)
+        cerr << "Could not start the server. Port 8080 may already be in use." << endl;
+
+    delete memory;
+    return started ? 0 : 1;
+}
+#endif
